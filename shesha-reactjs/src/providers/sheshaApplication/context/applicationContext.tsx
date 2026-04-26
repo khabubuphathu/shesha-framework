@@ -12,9 +12,18 @@ import { useMetadataDispatcher } from '@/providers/metadataDispatcher/provider';
 import { IMetadataBuilder, IObjectMetadataBuilder } from '@/utils/metadata/metadataBuilder';
 import { createNamedContext } from '@/utils/react';
 import { useFormBuilderFactory } from '@/form-factory/hooks';
+import type { SheshaPlugin } from '@shesha-io/core';
 
-export interface ApplicationPluginRegistration {
-  name: string;
+/**
+ * Registration record for a React-aware Shesha plugin.
+ *
+ * Extends the core {@link SheshaPlugin} contract with React-specific concerns:
+ * - `buildMetadata` — contributes to the application context metadata used by
+ *   the form designer
+ * - `data` — the already-initialised API object (shortcut for plugins that do
+ *   not need an async init step)
+ */
+export interface ApplicationPluginRegistration extends Pick<SheshaPlugin, 'name'> {
   buildMetadata: (apiBuilder: IObjectMetadataBuilder, metadataBuilder: IMetadataBuilder) => void;
   data: unknown;
 }
@@ -131,3 +140,4 @@ export const usePublicApplicationApi = (): IApplicationApi => {
   }
   return context;
 };
+

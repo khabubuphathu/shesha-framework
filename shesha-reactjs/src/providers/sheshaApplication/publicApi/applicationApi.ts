@@ -9,9 +9,20 @@ import { NavigatorApi, INavigatorApi } from './navigator/api';
 import { IShaRouter } from '@/providers/shaRouting/contexts';
 import { IMetadataDispatcher } from '@/providers/metadataDispatcher/contexts';
 import { FormBuilderFactory } from '@/form-factory/interfaces';
+import type { SheshaPlugin } from '@shesha-io/core';
 
-export interface IApplicationPlugin {
-  name: string;
+/**
+ * Runtime plugin registration record used by {@link ApplicationApi}.
+ *
+ * Extends the core {@link SheshaPlugin} contract so that:
+ * - `name` is the unique key
+ * - `data` is the already-initialised API object contributed by the plugin
+ *
+ * @deprecated Prefer registering plugins via `SheshaClient` from `@shesha-io/core`
+ *   and using `SheshaPlugin` directly. `IApplicationPlugin` will be removed in a
+ *   future major release.
+ */
+export interface IApplicationPlugin extends Pick<SheshaPlugin, 'name'> {
   data: unknown;
 }
 
@@ -79,3 +90,4 @@ export class ApplicationApi implements IApplicationApi {
     delete this[pluginName as keyof IApplicationApi];
   }
 }
+
