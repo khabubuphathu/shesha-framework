@@ -3,7 +3,7 @@ import { IRouter } from '../shaRouting';
 import { ThemeProviderProps } from '../theme';
 import { DEFAULT_SHESHA_ROUTES, IHttpHeadersDictionary, ISheshaRoutes } from './contexts';
 import IRequestHeaders from '@/interfaces/requestHeaders';
-import React, { MutableRefObject, useState } from 'react';
+import React, { MutableRefObject, useEffect, useState } from 'react';
 import { createNamedContext } from '@/utils/react';
 import { FRONTEND_DEFAULT_APP_KEY } from '@/components/settingsEditor/provider/models';
 import { IAuthProviderRefProps } from '../auth';
@@ -11,6 +11,7 @@ import { FRONT_END_APP_HEADER_NAME } from './models';
 import { ISettingsComponentGroup } from '@/designer-components/settingsInput/settingsInput';
 import { isDefined } from '@/utils/nullables';
 import { setOrDelete } from '@/utils/dictionary';
+import { SheshaEventEmitter } from '@shesha-io/core';
 
 export interface IShaApplicationArgs {
   backendUrl: string;
@@ -59,15 +60,32 @@ export interface ISheshaApplicationInstance {
   initializationState: ApplicationInitializationState;
   registerInitialization: (uid: string, action: InitializationAction) => void;
   buildHttpRequestHeaders: (() => IHttpHeadersDictionary) | undefined;
-}
 
-type RerenderTrigger = () => void;
+  /**
+   * Subscribe to state-change notifications emitted by this instance.
+   *
+   * Framework adapters call this to bridge the framework-agnostic event system
+   * with their own reactivity mechanism (e.g. React `useState`).
+   *
+   * @returns An unsubscribe function — call it when the subscription is no longer needed.
+   */
+  subscribe: (listener: () => void) => () => void;
+}
 
 export type AppInitializationStatus = 'waiting' | 'inprogress' | 'ready' | 'failed';
 export interface ApplicationInitializationState {
   status: AppInitializationStatus;
   hint?: string | undefined;
   error?: IErrorInfo | undefined;
+}
+
+/**
+ * Internal event map for {@link SheshaApplicationInstance}.
+ * @internal
+ */
+interface SheshaApplicationEvents extends Record<string, unknown> {
+  /** Fired whenever the instance mutates state that consumers need to react to. */
+  change: void;
 }
 
 export class SheshaApplicationInstance implements ISheshaApplicationInstance {
@@ -99,7 +117,12 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
 
   #globalVariables: Record<string, unknown>;
 
-  #rerender: RerenderTrigger;
+  /**
+   * Framework-agnostic event emitter — replaces the previous `#rerender` callback.
+   * Any framework adapter (React, Vue, …) that needs to react to state changes
+   * should subscribe via {@link subscribe}.
+   */
+  readonly #emitter = new SheshaEventEmitter<SheshaApplicationEvents>();
 
   get backendUrl(): string {
     return this.#backendUrl;
@@ -137,7 +160,7 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
     return this.#buildHttpRequestHeaders;
   }
 
-  constructor(args: IShaApplicationArgs, forceRootUpdate: RerenderTrigger) {
+  constructor(args: IShaApplicationArgs) {
     this.#initializationState = {
       status: 'waiting',
     };
@@ -155,11 +178,27 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
     this.#globalVariables = {};
     this.#httpHeaders = { [FRONT_END_APP_HEADER_NAME]: this.#applicationKey };
 
-    this.#rerender = forceRootUpdate;
-
     this.#settingsComponentRegistrations = {};
     this.#settingsComponentGroups = [];
   }
+
+  /**
+   * Subscribe to state-change events.
+   *
+   * The React adapter calls this inside a `useEffect` so that it can call
+   * `forceUpdate` whenever the instance mutates, without the class needing
+   * any React import.
+   *
+   * @returns An unsubscribe function.
+   */
+  subscribe = (listener: () => void): (() => void) => {
+    return this.#emitter.on('change', listener);
+  };
+
+  /** Notify all subscribers that state has changed. */
+  #notifyChange = (): void => {
+    this.#emitter.emit('change', undefined);
+  };
 
   #initializationActions: Record<string, InitializationAction> = {};
 
@@ -173,7 +212,7 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
 
   init = async (): Promise<void> => {
     this.#initializationState = { status: 'inprogress', hint: 'Initializing...', error: undefined };
-    this.#rerender();
+    this.#notifyChange();
 
     try {
       // do initialization actions...
@@ -185,11 +224,11 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
       }
 
       this.#initializationState = { status: 'ready', hint: undefined };
-      this.#rerender();
+      this.#notifyChange();
     } catch (error) {
       console.error('Application initialization failed', error);
       this.#initializationState = { status: 'failed', error: error as IErrorInfo };
-      this.#rerender();
+      this.#notifyChange();
     }
   };
 
@@ -210,7 +249,7 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
     setOrDelete(newHeaders, FRONT_END_APP_HEADER_NAME, this.#applicationKey);
 
     this.#httpHeaders = newHeaders;
-    this.#rerender();
+    this.#notifyChange();
   };
 
   get globalVariables(): Record<string, unknown> {
@@ -219,7 +258,7 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
 
   setGlobalVariables = (values: Record<string, unknown>): void => {
     this.#globalVariables = { ...this.#globalVariables, ...values };
-    this.#rerender();
+    this.#notifyChange();
   };
 
   anyOfPermissionsGranted = (permissions: string[]): boolean => {
@@ -237,7 +276,7 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
     }
     this.#formDesignerComponentRegistrations = registrations;
     this.#formDesignerComponentGroups = componentGroups;
-    this.#rerender();
+    this.#notifyChange();
   };
 
   registerSettingsComponents = (owner: string, components: ISettingsComponentGroup[]): void => {
@@ -250,19 +289,27 @@ export class SheshaApplicationInstance implements ISheshaApplicationInstance {
     }
     this.#settingsComponentRegistrations = registrations;
     this.#settingsComponentGroups = componentGroups;
-    this.#rerender();
+    this.#notifyChange();
   };
 }
 
+/**
+ * React hook that creates and manages a {@link SheshaApplicationInstance}.
+ *
+ * The instance itself has no React dependency — it emits change events via
+ * {@link SheshaEventEmitter}. This hook subscribes to those events and
+ * triggers a React re-render whenever the instance notifies subscribers.
+ */
 export const useSheshaApplicationInstance = (args: IShaApplicationArgs): ISheshaApplicationInstance => {
   const [, forceUpdate] = React.useState({});
-  const [appInstance] = useState<ISheshaApplicationInstance>(() => {
-    const forceReRender = (): void => {
-      forceUpdate({});
-    };
+  const [appInstance] = useState<ISheshaApplicationInstance>(
+    () => new SheshaApplicationInstance(args) satisfies ISheshaApplicationInstance,
+  );
 
-    return new SheshaApplicationInstance(args, forceReRender) satisfies ISheshaApplicationInstance;
-  });
+  useEffect(() => {
+    // Subscribe to framework-agnostic change events and bridge them to React.
+    return appInstance.subscribe(() => forceUpdate({}));
+  }, [appInstance]);
 
   return appInstance;
 };
@@ -271,3 +318,4 @@ export const SheshaApplicationInstanceContext = createNamedContext<ISheshaApplic
   undefined,
   'SheshaApplicationInstanceContext',
 );
+

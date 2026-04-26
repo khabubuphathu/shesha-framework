@@ -1,0 +1,43 @@
+{
+  "name": "@shesha-io/core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic core for the Shesha framework — plugin infrastructure, HTTP client interface, and application lifecycle management",
+  "license": "GPL-3.0",
+  "homepage": "https://www.shesha.io/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shesha-io/shesha-framework"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./http": {
+      "require": "./dist/http/index.js",
+      "types": "./dist/http/index.d.ts"
+    },
+    "./plugins": {
+      "require": "./dist/plugins/index.js",
+      "types": "./dist/plugins/index.d.ts"
+    }
+  },
+  "engines": {
+    "node": ">=18",
+    "npm": ">=9"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

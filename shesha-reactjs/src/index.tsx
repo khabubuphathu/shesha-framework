@@ -37,3 +37,22 @@ export { type DocumentDefinition, type IDocumentInstance } from './configuration
 export { DocumentInstance } from './configuration-studio/cs/documentInstance';
 export { DocumentDefinitionRegistration } from './configuration-studio/document-definitions/documentDefinitionRegistration';
 export { useConfigurationStudio } from './configuration-studio/cs/contexts';
+
+// Re-export core types so that consumers of @shesha-io/react do not need an
+// additional dependency on @shesha-io/core.
+export type {
+  HttpClientApi,
+  HttpResponse,
+  HttpRequestConfig,
+  ResponseType,
+  SheshaPlugin,
+  SheshaPluginContext,
+  InferPluginApi,
+  PluginApiMap,
+  SheshaClientStatus,
+  SheshaClientState,
+  SheshaClientEvents,
+  SheshaClientOptions,
+} from '@shesha-io/core';
+export { SheshaEventEmitter, SheshaClient, createShesha } from '@shesha-io/core';
+
