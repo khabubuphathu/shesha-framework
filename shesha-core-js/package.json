@@ -9,21 +9,17 @@
     "url": "https://github.com/shesha-io/shesha-framework"
   },
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.esm.js",
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./http": {
-      "import": "./dist/http/index.esm.js",
       "require": "./dist/http/index.js",
       "types": "./dist/http/index.d.ts"
     },
     "./plugins": {
-      "import": "./dist/plugins/index.esm.js",
       "require": "./dist/plugins/index.js",
       "types": "./dist/plugins/index.d.ts"
     }
